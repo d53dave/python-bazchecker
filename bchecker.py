@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import time
 import re
 import os
@@ -42,7 +43,7 @@ def diff(a, b):
 
 def send_new_results(new_results):
     result_count = str(len(new_results))
-    msg = "There are "+result_count+" new flats available!\n"
+    msg = "There are %s new offers available!\n" % result_count
     msg += '\n****\n'.join([base_url+item_url for (item_id, item_url) in new_results])
     for chat_id in chat_ids:
         logger.info("Broadcasting %s new offers to chat %s" %(result_count, chat_id))
@@ -60,7 +61,7 @@ def tick():
         new_results.append((result['id'], result_url))
     global cached_results
     result_diff = diff(new_results, cached_results)
-    logger.info("Found "+str(len(result_diff))+" new offers!")
+    logger.info("Found %s new offers!", str(len(result_diff)))
     if(len(result_diff) > 0):
         cached_results = new_results
         send_new_results(result_diff)
@@ -70,7 +71,7 @@ def error_listener(event):
     if event.exception:
         print('The job crashed :(')
         for chat_id in chat_ids:
-            bot.send_message(chat_id, "Job crashed with message ["+event.exception+"]")
+            bot.send_message(chat_id, "Job crashed with exception [%s]" % event.exception)
 
 
 if __name__ == '__main__':
