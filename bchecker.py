@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 import time
 import re
 import os
 import logging
 import telebot
+import urllib3
 from logging.handlers import RotatingFileHandler
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.events import EVENT_JOB_ERROR
-from urllib.request import urlopen
 from bs4 import BeautifulSoup
 
 LOG_FILENAME="bchecker.log"
@@ -22,13 +23,19 @@ formatter = logging.Formatter(LOG_FORMAT, datefmt=DATE_FMT)
 handler = RotatingFileHandler(LOG_FILENAME, maxBytes=131072, backupCount=5)#10mb
 handler.setFormatter(formatter)
 logger.addHandler(handler)
+logging.getLogger("apscheduler").addHandler(handler)
+logging.getLogger("requests").addHandler(handler)
 
+update_interval = 5 #minutes
 base_url = 'http://www.bazar.at'
 request_url = base_url+'/wien-wohnungen-anzeigen,dir,1,cId,14,fc,9,loc,9,vi,1,ret,9,rf,5,tp,0,at,1925'
+user_agent = {'user-agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML like Gecko) Chrome/43.0.2357.124 Safari/537.36'}
+http = urllib3.PoolManager(10, headers=user_agent)
 chat_ids = set([])
-capture_url = re.compile(r"showAdDetail\(\d+,\s+'(\S+)'\)")
+capture_url = re.compile(r"showAdDetail\(\d+,\s+'(\S+)'")
 cached_results = []
 bot = telebot.TeleBot(os.environ['TELEBOT_TOKEN'])
+
 
 @bot.message_handler(func=lambda message: True, content_types=['document', 'text'])
 def command_handle_document(message):
@@ -37,20 +44,28 @@ def command_handle_document(message):
     logging.info("Registered user %s with chat id %s" % (message.from_user.username, message.chat.id))
     bot.reply_to(message, "You will receive future updates!")
 
+
 def diff(a, b):
     b = set(b)
     return [aa for aa in a if aa not in b]
+
+
+def broadcast(message, log_msg):
+    for chat_id in chat_ids:
+          if log_msg is not None:
+              logger.info("Sending to chat(%s): %s" % (chat_id, log_msg))
+          bot.send_message(chat_id, message)
+
 
 def send_new_results(new_results):
     result_count = str(len(new_results))
     msg = "There are %s new offers available!\n" % result_count
     msg += '\n****\n'.join([base_url+item_url for (item_id, item_url) in new_results])
-    for chat_id in chat_ids:
-        logger.info("Broadcasting %s new offers to chat %s" %(result_count, chat_id))
-        bot.send_message(chat_id, msg)
+    broadcast(msg, "%s new offers!" % result_count)
+
 
 def tick():
-    response = urlopen(request_url)
+    response = http.urlopen('GET', request_url)
     html_doc = response.read()
     soup = BeautifulSoup(html_doc, 'html.parser')
     new_results = []
@@ -70,14 +85,14 @@ def tick():
 def error_listener(event):
     if event.exception:
         print('The job crashed :(')
-        for chat_id in chat_ids:
-            bot.send_message(chat_id, "Job crashed with exception [%s]" % event.exception)
+        msg = "Job crashed with exception [%s]" % event.exception
+        broadcast(msg, msg)
 
 
 if __name__ == '__main__':
     logger.info("Application startup.")
     scheduler = BackgroundScheduler()
-    scheduler.add_job(tick, 'interval', minutes=5)
+    scheduler.add_job(tick, 'interval', minutes=update_interval)
     scheduler.add_listener(error_listener, EVENT_JOB_ERROR)
     scheduler.start()
     bot.polling()
