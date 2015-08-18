@@ -59,7 +59,8 @@ def broadcast(message, log_msg):
 
 def send_new_results(new_results):
     result_count = str(len(new_results))
-    msg = "There are %s new offers available!\n" % result_count
+    msgtext = "There is %s new offer available!\n" if result_count > 1 else "There are %s new offers available!\n"
+    msg = msgtext % result_count
     msg += '\n****\n'.join([base_url+item_url for (item_id, item_url) in new_results])
     broadcast(msg, "%s new offers!" % result_count)
 
