@@ -1,4 +1,4 @@
-#python-bazchecker
+# python-bazchecker
 
 A small python script I wrote that periodically checks a website that hosts apartment offers and sends new apartment offers to my phone via [Telegram, using its Bots API](https://core.telegram.org/bots/api).
 
